@@ -1,0 +1,94 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: VPC setup for OpenSupports application.
+
+Parameters:
+  Environment:
+    Type: String
+    Default: "dev"
+    AllowedValues:
+      - "dev"
+      - "staging"
+      - "prod"
+    Description: "The environment in which to deploy (dev, staging, or prod)."
+  VpcCidr:
+    Type: String
+    Default: "10.0.0.0/16"
+    Description: "The CIDR block for the VPC."
+
+  PublicSubnetCidr:
+    Type: String
+    Default: "10.0.1.0/24"
+    Description: "The CIDR block for the public subnet."
+
+  PrivateSubnetCidr:
+    Type: String
+    Default: "10.0.2.0/24"
+    Description: "The CIDR block for the private subnet."
+
+
+Resources:
+  VPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-vpc"
+
+  PublicSubnet:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      CidrBlock: !Ref PublicSubnetCidr
+      VpcId: !Ref VPC
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select [ 0, !GetAZs "" ]
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-public-subnet"
+
+  PrivateSubnet:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      CidrBlock: !Ref PrivateSubnetCidr
+      VpcId: !Ref VPC
+      MapPublicIpOnLaunch: false
+      AvailabilityZone: !Select [ 1, !GetAZs "" ]
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-private-subnet"
+
+  InternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-igw"
+
+  AttachGateway:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicRouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-public-rt"
+
+  PublicRoute:
+    Type: 'AWS::EC2::Route'
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
