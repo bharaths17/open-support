@@ -1,0 +1,108 @@
+pipeline {
+    agent any
+
+    environment {
+        AWS_REGION = 'us-east-1' // Change this to your desired AWS region
+        STACK_NAME_DEV = 'OpenSupports-Dev'
+        STACK_NAME_STAGING = 'OpenSupports-Staging'
+        STACK_NAME_PROD = 'OpenSupports-Prod'
+      
+    }
+
+    parameters {
+        choice(name: 'ENVIRONMENT', choices: ['dev', 'staging', 'prod'], description: 'Choose the environment to deploy')
+    }
+
+    stages {
+        stage('Checkout Code') {
+            steps {
+                git branch: 'main', url: "https://github.com/opensupports/opensupports.git"
+            }
+        }
+
+        stage('Deploy CloudFormation Stack') {
+            steps {
+                script {
+                    def stackName = ''
+                    if (params.ENVIRONMENT == 'dev') {
+                        stackName = STACK_NAME_DEV
+                    } else if (params.ENVIRONMENT == 'staging') {
+                        stackName = STACK_NAME_STAGING
+                    } else if (params.ENVIRONMENT == 'prod') {
+                        stackName = STACK_NAME_PROD
+                    }
+
+                    sh """
+                    aws cloudformation deploy \
+                    --template-file cloudformation/vpc.yml \
+                    --stack-name ${stackName} \
+                    --parameter-overrides Environment=${params.ENVIRONMENT} \
+                    --region ${AWS_REGION} \
+                    --capabilities CAPABILITY_NAMED_IAM
+                    """
+                }
+            }
+        }
+
+        stage('Deploy EC2 and Application') {
+            steps {
+                script {
+                    sh """
+                    aws cloudformation deploy \
+                    --template-file cloudformation/ec2.yml \
+                    --stack-name ${params.ENVIRONMENT}-EC2-OpenSupports \
+                    --parameter-overrides Environment=${params.ENVIRONMENT} \
+                    --region ${AWS_REGION} \
+                    --capabilities CAPABILITY_NAMED_IAM
+                    """
+                }
+
+                // Optional: You could add SSH commands here to install and configure the OpenSupports application
+            }
+        }
+
+        stage('Testing') {
+            steps {
+                echo "Running tests for ${params.ENVIRONMENT} environment"
+                // Add tests or health checks here. For now, just a placeholder.
+                sh 'curl -s http://54.242.248.100/healthcheck'
+            }
+        }
+
+        stage('Manual Approval for Promotion') {
+            when {
+                expression {
+                    return params.ENVIRONMENT != 'prod' // Skip approval for prod
+                }
+            }
+            steps {
+                script {
+                    input message: "Promote ${params.ENVIRONMENT} to next environment?", ok: "Proceed"
+                }
+            }
+        }
+
+        stage('Promote to Next Environment') {
+            when {
+                expression {
+                    return params.ENVIRONMENT == 'dev' || params.ENVIRONMENT == 'staging'
+                }
+            }
+            steps {
+                script {
+                    def nextEnv = params.ENVIRONMENT == 'dev' ? 'staging' : 'prod'
+                    build job: 'your-jenkins-job-name', parameters: [string(name: 'ENVIRONMENT', value: nextEnv)]
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Deployment to ${params.ENVIRONMENT} completed successfully!"
+        }
+        failure {
+            echo "Deployment to ${params.ENVIRONMENT} failed."
+        }
+    }
+}
