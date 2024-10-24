@@ -1,0 +1,28 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: S3 bucket for OpenSupports application static files.
+Parameters:
+  Environment:
+    Type: String
+    Default: "dev"
+    AllowedValues:
+      - "dev"
+      - "staging"
+      - "prod"
+    Description: "The environment in which to deploy (dev, staging, or prod)."
+Resources:
+  StaticFilesBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Sub "${Environment}-opensupports-static-files"
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOldFiles
+            Status: Enabled
+            ExpirationInDays: 30
+
+Outputs:
+  S3BucketName:
+    Description: 'S3 bucket name for static file storage.'
+    Value: !Ref StaticFilesBucket
