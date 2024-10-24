@@ -1,0 +1,55 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: EC2 Instance for OpenSupports application.
+Parameters:
+  Environment:
+    Type: String
+    Default: "dev"
+    AllowedValues:
+      - "dev"
+      - "staging"
+      - "prod"
+    Description: "The environment in which to deploy (dev, staging, or prod)."
+
+  InstanceType:
+    Type: String
+    Default: "t2.micro"
+    Description: "The EC2 instance type."
+
+  KeyName:
+    Type: String
+    Default: open-support
+    Description: "The name of the EC2 KeyPair to allow SSH access."
+
+  AMIId:
+    Type: String
+    Default: ami-0866a3c8686eaeeba
+    Description: "The AMI ID to launch for EC2 instances."
+
+
+
+    
+Resources:
+  EC2Instance:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      ImageId: !Ref AMIId
+      SecurityGroupIds:
+        - !Ref InstanceSecurityGroup
+      SubnetId: !Ref PublicSubnet
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-opensupports-ec2"
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y httpd
+          systemctl start httpd
+          systemctl enable httpd
+          cd /var/www/html
+          git clone https://github.com/opensupports/opensupports.git
+          cp config.sample.php config.php
+          sh "build.sh"
+          # Install other dependencies (PHP, MySQL client, etc.)
