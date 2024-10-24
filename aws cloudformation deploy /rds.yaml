@@ -1,0 +1,48 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: RDS (MySQL) database for OpenSupports application.
+Parameters:
+  Environment:
+    Type: String
+    Default: "dev"
+    AllowedValues:
+      - "dev"
+      - "staging"
+      - "prod"
+    Description: "The environment in which to deploy (dev, staging, or prod)."
+  DBInstanceClass:
+    Type: String
+    Default: "db.t2.micro"
+    Description: "The RDS instance type."
+
+  DBUsername:
+    Type: String
+    Default: "admin"
+    Description: "The master username for the MySQL database."
+
+  DBPassword:
+    Type: String
+    NoEcho: true
+    Description: "The master password for the MySQL database."
+Resources:
+  RDSInstance:
+    Type: 'AWS::RDS::DBInstance'
+    Properties:
+      DBInstanceClass: !Ref DBInstanceClass
+      Engine: 'mysql'
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      AllocatedStorage: '20'
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      DBName: opensupportsdb
+      MultiAZ: false
+      PubliclyAccessible: false
+      StorageType: gp2
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-rds"
+
+Outputs:
+  RDSHostName:
+    Description: 'RDS MySQL instance endpoint.'
+    Value: !GetAtt RDSInstance.Endpoint.Address
